@@ -1,50 +1,36 @@
-import os
 import re
-from subprocess import run, PIPE, DEVNULL
+import pyperclip
+from pyclipboard.dmenu import select_file_or_dir, dmenu_input
 
 
+SNIPPET_PROMPT = 'Which snippet:'
 SNIPPET_DIR = "/home/zan/sync/dat/snippets/"
+PH_DELIM = '~!~'
 
-def dmenu_input(prompt: str) -> str:
-    process = run(
-        ['dmenu', '-p', prompt],
-        stdin=DEVNULL,
-        stdout=PIPE,
-        text=True)
-
-    return process.stdout.strip()
-
-def snippet_names(snippet_dir: str) -> list[str]:
-    return [file_name.split('.')[0]
-            for file_name in os.listdir(snippet_dir)]
-    
 def choose_snippet(snippet_dir: str) -> str:
-    snippets = snippet_names(snippet_dir)
-    snippets = '\n'.join(snippets)
-    process = run(
-        ['dmenu', '-p', 'Which snippet?'],
-        input=snippets,
-        stdout=PIPE,
-        text=True
-    )
-
-    snippet_name = process.stdout.strip()
-    snippet_path = os.path.join(SNIPPET_DIR, (snippet_name + '.txt'))
-
+    snippet_path = select_file_or_dir(SNIPPET_PROMPT, snippet_dir, recurse=True)
     with open(snippet_path, 'r') as f:
         snippet = f.read()
 
     return snippet
 
-def replace_placeholders(snippet: str) -> str:
-    placeholders = re.findall(r'~!~[^(~!~)]*~!~', snippet)
+def replace_placeholders(snippet: str, ph_delim: str) -> str:
+    ph_length = len(ph_delim)
+    placeholders = re.findall(f'{ph_delim}[^({ph_delim})]*{ph_delim}', snippet)
     finished_placeholders = []
-
+    
     for placeholder in placeholders:
         if placeholder not in finished_placeholders:
-            new_text = dmenu_input(placeholder[3: -3] + ': ')
+            new_text = dmenu_input(placeholder[ph_length: -ph_length] + ':')
             snippet = snippet.replace(placeholder, new_text)
             finished_placeholders.append(placeholder)
 
     return snippet
 
+def copy_snippet(snippet_dir: str, ph_delim: str = PH_DELIM) -> None:
+    snippet = choose_snippet(snippet_dir)
+    snippet = replace_placeholders(snippet, ph_delim)
+    pyperclip.copy(snippet)
+
+def pyclipboard() -> None:
+    copy_snippet(SNIPPET_DIR)
